@@ -46,23 +46,25 @@ def verifyuf(func):
 
             # Dados para consulta da planilha de Origem
             coluna_lado = sheetorigem.columns.get_loc(colunaorigem) + 1
-            coluna_lado_nome = sheetorigem.columns[coluna_lado]
+            coluna_lado_nome = sheetorigem.columns.values[coluna_lado]
             estado_consulta = sheetorigem.loc[0, coluna_lado_nome]
 
             # Dados para consulta da planilha de destino
             coluna_lado_destino = sheetdestino.columns.get_loc(colunadestino) + 1
-            coluna_lado_nome_destino = sheetdestino.columns[coluna_lado_destino]
+            coluna_lado_nome_destino = sheetdestino.columns.values[coluna_lado_destino]
             estado_consulta_destino = sheetdestino.loc[0, coluna_lado_nome_destino]
 
             try:
                 # Verifica a coluna da planilha de Origem
-                if estado_consulta.upper() in estados:
-                    kwargs['uforigem'] = coluna_lado_nome
-
+                if str(estado_consulta).upper() in estados:
+                    kwargs.update({'uforigem': coluna_lado_nome})
+                else:
+                    kwargs.update({'uforigem': None})
                 # Verifica a coluna da planilha de destino
-                if estado_consulta_destino.upper() in estados:
-                    kwargs['ufdestino'] = coluna_lado_nome_destino
-
+                if str(estado_consulta_destino).upper() in estados:
+                    kwargs.update({'ufdestino': coluna_lado_nome_destino})
+                else:
+                    kwargs.update({'ufdestino': None})
             except Exception as e:
                 print('Error: ', e)
 
