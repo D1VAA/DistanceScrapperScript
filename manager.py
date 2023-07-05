@@ -8,7 +8,6 @@ from bs4 import BeautifulSoup
 from packages.verifyColumns import verifyuf
 from packages.managingProxy import proxyManager
 
-length_batches = 10
 url = 'https://www.google.com/search?'
 estados = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
            'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']
@@ -32,14 +31,18 @@ class Colors:
     BG_WHITESMOKE = '\033[7;49;97m'
     BG_WHITE = '\033[7;49;39m'
     GREEN = '\033[32m'
+    BG_GREEN = '\033[7;49;32m'
 
 
 class ConsultaSheet:
     @verifyuf
-    def __init__(self, option, sheet1, sheet2, colunaorigem, colunadestino, uforigem=None, ufdestino=None):
+    def __init__(self, option, sheet1, sheet2, colunaorigem, colunadestino, uforigem=None, ufdestino=None,
+                 batchsize=None):
         self.option = option
+        self.length_batches = batchsize
         self.colunaOrigem = colunaorigem
         self.colunaDestino = colunadestino
+        self.contador = 0
         self.sheetOrigem = pd.read_excel(sheet1)
         self.sheetDestino = pd.read_excel(sheet2)
 
@@ -49,44 +52,58 @@ class ConsultaSheet:
         self.dataDestino = self.sheetDestino[[self.colunaDestino, self.ufDestino]]
 
     async def createparams(self):
-        for _, row in self.dataOrigem.iterrows():
-            for _, row2 in self.dataDestino.iterrows():
-                origin = f"{row[self.colunaOrigem].title()} {row[self.ufOrigem]}"
-                destiny = f'{row2[self.colunaDestino].title()} {row2[self.ufDestino]}'
+        if self.option == 1:
+            for _, row in self.dataOrigem.iterrows():
+                for _, row2 in self.dataDestino.iterrows():
+                    origin = f"{row[self.colunaOrigem].title()} {row[self.ufOrigem]}"
+                    destiny = f'{row2[self.colunaDestino].title()} {row2[self.ufDestino]}'
 
-                params = {
-                    'q': f'distância entre {origin} e {destiny}'}
+                    params = {
+                        'q': f'distância entre {origin} e {destiny}'}
 
-                if len(params_dict) < 1:
-                    params_dict[f'{row[self.colunaOrigem]} x {row2[self.colunaDestino]}'] = params
-                else:
-                    if f'{row[self.colunaOrigem]} x {row2[self.colunaDestino]}' not in params_dict.keys():
-                        params_dict[f'{row[self.colunaOrigem]} x {row2[self.colunaDestino]}'] = params
+                    if len(params_dict) < 1:
+                        params_dict[f'{row[self.colunaOrigem]} x {row2[self.colunaDestino]}'] = [params]
+                    elif f'{row[self.colunaOrigem]} x {row2[self.colunaDestino]}' not in params_dict.keys():
+                        params_dict[f'{row[self.colunaOrigem]} x {row2[self.colunaDestino]}'] = [params]
 
-    @staticmethod
-    async def dorequest(session, origem, destino, params, proxy=None):
-        for _ in params:
+        elif self.option == 2:
+            for (i, row), (_, row2) in zip(self.sheetOrigem.iterrows(), self.sheetDestino.iterrows()):
+                origem = row[self.colunaOrigem]
+                destino = row2[self.colunaDestino]
+                ufori = row[self.ufOrigem]
+                ufdest = row2[self.ufDestino]
+                param = {'q': f'distância entre {origem} {ufori} e {destino} {ufdest}'}
+                if f'{origem} x {destino}' not in params_dict.keys():
+                    params_dict[f'{origem} x {destino}'] = [param]
+                elif f'{origem} x {destino}' in params_dict.keys():
+                    params_dict[f'{origem} x {destino}'].append(param)
+
+    async def dorequest(self, session, origem, destino, params, proxy=None):
+        for param in params:
             try:
-                async with session.get(url, params=params, headers=headers, proxy=proxy) as response:
-                    print(Colors.RED + f'{"BUSCANDO:"}' + Colors.NEUTRAL, end=" ")
-                    print('Distância entre: ' + Colors.CIAN + f'{origem:^23} x {destino:^23}' + Colors.NEUTRAL)
+                if origem in htmls.keys() and destino in htmls[origem]:
+                    pass
+                else:
+                    async with session.get(url, params=param, headers=headers, proxy=proxy) as response:
+                        print(Colors.RED + f'{"BUSCANDO:"}' + Colors.NEUTRAL, end=" ")
+                        print('Distância entre: ' + Colors.CIAN + f'{origem:^23} x {destino:^23}' + Colors.NEUTRAL)
 
-                    status_code = response.status
-                    if status_code == 429:
-                        print(f'Response Code: {status_code} Too Many Requests')
-                        print('\n\nAtivando Proxies para prosseguir...')
-                        return 'useProxy'
+                        status_code = response.status
+                        if status_code == 429:
+                            pass
 
-                    html = await response.text()
+                        html = await response.text()
 
-                    if origem not in htmls.keys():
-                        htmls[origem] = {}
+                        if origem not in htmls.keys():
+                            htmls[origem] = {}
 
-                    elif destino not in htmls[origem]:
-                        htmls[origem][destino] = html
+                        elif destino not in htmls[origem]:
+                            htmls[origem][destino] = html
 
             except Exception as e:
                 print('Error', e)
+
+        self.contador += 1
 
     @staticmethod
     def scrapresponse():
@@ -144,12 +161,13 @@ class ConsultaSheet:
             exp['Distância'] = km
 
         exp.to_excel(r'./Result.xlsx')
+        print(Colors.BG_GREEN + 'Exported...' + Colors.NEUTRAL)
 
     async def tasks_manager(self):
         async with aiohttp.ClientSession() as session:  # Start a session with aiohttp
             await self.createparams()
             params_dict_copy = params_dict.copy()
-            batches = zip_longest(*[iter(params_dict_copy)] * length_batches)
+            batches = zip_longest(*[iter(params_dict_copy)] * self.length_batches)
             inicio = time.time()
             tasks = []
 
@@ -158,18 +176,17 @@ class ConsultaSheet:
                 for x, params in batch_items:
                     origem = x.split('x')[0][:-1].title()  # Origin name formatted
                     destino = x.split('x')[-1][1:].title()  # Destination name formatted
-
                     tasks.append(asyncio.create_task(self.dorequest(session=session,
                                                                     origem=origem,
                                                                     destino=destino,
-                                                                    params=params, )))
+                                                                    params=params)))
 
                 await asyncio.gather(*tasks)
 
             fim = time.time()
             texec = fim - inicio
             print('\n')
-            print(f'Requisições Feitas: ' + Colors.UND_RED + f'{len(tasks)}' + Colors.NEUTRAL, end=' ')
+            print(f'Requisições Feitas: ' + Colors.UND_RED + f'{self.contador}' + Colors.NEUTRAL, end=' ')
             print(f'=> Tempo de Execução: {Colors.UND_RED}{texec:.2f}' + Colors.NEUTRAL)
 
             self.scrapresponse()
