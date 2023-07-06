@@ -1,5 +1,3 @@
-import inspect
-
 import pandas as pd
 
 estados = ['AR', 'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE',
@@ -61,19 +59,19 @@ def verifyuf(func):
             coluna_lado_nome_destino = sheetdestino.columns.values[coluna_lado_destino]
             estado_consulta_destino = sheetdestino.loc[0, coluna_lado_nome_destino]
 
-            # Verifica a coluna da planilha de Origem
-            if estado_consulta.upper() in estados:
-                kwargs.update({'uforigem': coluna_lado_nome})
-
-            elif estado_consulta.upper() not in estados:
-                kwargs.update({'uforigem': None})
-            # Verifica a coluna da planilha de destino\
-
-            if estado_consulta_destino.upper() in estados:
-                kwargs.update({'ufdestino': coluna_lado_nome_destino})
-
-            elif estado_consulta_destino.upper() not in estados:
-                kwargs.update({'ufdestino': None})
+            try:
+                # Verifica a coluna da planilha de Origem
+                if str(estado_consulta).upper() in estados:
+                    kwargs.update({'uforigem': coluna_lado_nome})
+                else:
+                    kwargs.update({'uforigem': None})
+                # Verifica a coluna da planilha de destino
+                if str(estado_consulta_destino).upper() in estados:
+                    kwargs.update({'ufdestino': coluna_lado_nome_destino})
+                else:
+                    kwargs.update({'ufdestino': None})
+            except Exception as e:
+                print('Error: ', e)
 
         return func(*args, **kwargs)
 
