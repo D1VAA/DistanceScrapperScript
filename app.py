@@ -16,11 +16,7 @@ parser.add_argument('-bs', '--batchsize', default=10, type=int)
 
 args = parser.parse_args()
 
-print("Chosed Option ", args.option)
-
 if args.file is not None:
-    print("Origin file ", args.originfile)
-    print("Destiny File ", args.destinyfile)
     consulta = ConsultaSheet(option=args.option,
                              sheet1=args.file,
                              sheet2=args.file,
@@ -29,8 +25,6 @@ if args.file is not None:
                              batchsize=args.batchsize
                              )
 else:
-    print("Origin file ", args.originfile)
-    print("Destiny File ", args.destinyfile)
     consulta = ConsultaSheet(option=args.option,
                              sheet1=args.originfile,
                              sheet2=args.destinyfile,
