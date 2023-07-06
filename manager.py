@@ -6,7 +6,6 @@ import pandas as pd
 from itertools import zip_longest
 from bs4 import BeautifulSoup
 from packages.verifyColumns import verifyuf
-from packages.managingProxy import proxyManager
 
 url = 'https://www.google.com/search?'
 estados = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
@@ -17,99 +16,102 @@ headers = {
 
 params_dict = dict()
 distances: dict[str, dict[str, float | int]] = dict()
-htmls: dict[str, dict[str, str]] = dict()
 best_distance: dict[str, dict[str, str]] = dict()
 
 
 class Colors:
-    NEUTRAL = '\033[0m'
+    N = '\033[0m'
     BG_RED = "\033[7;49;91m"
     RED = '\033[1;49;91m'
     CIAN = '\033[36m'
-    ORANGE = '\033[33m'
+    BLUE = '\033[1;49;34m'
+    ORANGE = '\033[1;49;33m'
     UND_RED = '\033[4;49;91m'
     BG_WHITESMOKE = '\033[7;49;97m'
     BG_WHITE = '\033[7;49;39m'
-    GREEN = '\033[32m'
+    GREEN = '\033[1;49;32m'
     BG_GREEN = '\033[7;49;32m'
 
 
 class ConsultaSheet:
     @verifyuf
-    def __init__(self, option, sheet1, sheet2, colunaorigem, colunadestino, uforigem=None, ufdestino=None,
+    def __init__(self,
+                 option,
+                 sheet1,
+                 sheet2,
+                 colunaorigem,
+                 colunadestino,
+                 uforigem=None,
+                 ufdestino=None,
                  batchsize=None):
         self.option = option
+        self.htmls = dict()
         self.length_batches = batchsize
         self.colunaOrigem = colunaorigem
         self.colunaDestino = colunadestino
         self.contador = 0
         self.sheetOrigem = pd.read_excel(sheet1)
         self.sheetDestino = pd.read_excel(sheet2)
+        self.ufOrigem = uforigem
+        self.ufDestino = ufdestino
 
-        self.ufOrigem = uforigem if uforigem is not None else ""
-        self.ufDestino = ufdestino if ufdestino is not None else ""
-        self.dataOrigem = self.sheetOrigem[[self.colunaOrigem, self.ufOrigem]]
-        self.dataDestino = self.sheetDestino[[self.colunaDestino, self.ufDestino]]
+        self.dataOrigem = self.sheetOrigem[[self.colunaOrigem, self.ufOrigem]] \
+            if self.ufOrigem is not None else self.sheetOrigem[[self.colunaOrigem]]
+
+        self.dataDestino = self.sheetDestino[[self.colunaDestino, self.ufDestino]] \
+            if self.ufDestino is not None else self.sheetDestino[[self.colunaDestino]]
 
     async def createparams(self):
         if self.option == 1:
             for _, row in self.dataOrigem.iterrows():
                 for _, row2 in self.dataDestino.iterrows():
-                    origin = f"{row[self.colunaOrigem].title()} {row[self.ufOrigem]}"
-                    destiny = f'{row2[self.colunaDestino].title()} {row2[self.ufDestino]}'
+                    origem = row[self.colunaOrigem]
+                    destino = row2[self.colunaDestino]
+                    ufori = row[self.ufOrigem] if self.ufOrigem is not None else ''
+                    ufdest = row2[self.ufDestino] if self.ufDestino is not None else ''
+                    params = {'q': f'distância entre {origem} {ufori} e {destino} {ufdest}'}
 
-                    params = {
-                        'q': f'distância entre {origin} e {destiny}'}
+                    if f'{origem} x {destino}' not in params_dict.keys():
+                        params_dict[f'{origem} x {destino}'] = [params]
+                    elif f'{origem} x {destino}' not in params_dict.keys():
+                        params_dict[f'{origem} x {destino}'] = [params]
 
-                    if len(params_dict) < 1:
-                        params_dict[f'{row[self.colunaOrigem]} x {row2[self.colunaDestino]}'] = [params]
-                    elif f'{row[self.colunaOrigem]} x {row2[self.colunaDestino]}' not in params_dict.keys():
-                        params_dict[f'{row[self.colunaOrigem]} x {row2[self.colunaDestino]}'] = [params]
-
-        elif self.option == 2:
+        if self.option == 2:
             for (i, row), (_, row2) in zip(self.sheetOrigem.iterrows(), self.sheetDestino.iterrows()):
                 origem = row[self.colunaOrigem]
                 destino = row2[self.colunaDestino]
-                ufori = row[self.ufOrigem]
-                ufdest = row2[self.ufDestino]
+                ufori = row[self.ufOrigem] if self.ufOrigem is not None else ''
+                ufdest = row2[self.ufDestino] if self.ufDestino is not None else ''
                 param = {'q': f'distância entre {origem} {ufori} e {destino} {ufdest}'}
+
                 if f'{origem} x {destino}' not in params_dict.keys():
                     params_dict[f'{origem} x {destino}'] = [param]
                 elif f'{origem} x {destino}' in params_dict.keys():
                     params_dict[f'{origem} x {destino}'].append(param)
 
-    async def dorequest(self, session, origem, destino, params, proxy=None):
+    async def dorequest(self, session, origem, destino, params):
         for param in params:
             try:
-                if origem in htmls.keys() and destino in htmls[origem]:
-                    pass
-                else:
-                    async with session.get(url, params=param, headers=headers, proxy=proxy) as response:
-                        print(Colors.RED + f'{"BUSCANDO:"}' + Colors.NEUTRAL, end=" ")
-                        print('Distância entre: ' + Colors.CIAN + f'{origem:^23} x {destino:^23}' + Colors.NEUTRAL)
+                async with session.get(url, params=param, headers=headers) as response:
+                    print(f'{Colors.BLUE}|{Colors.N}', end=" ")
+                    print(f'{origem:^23} {Colors.RED}[x]{Colors.N} {destino:^23}{Colors.BLUE}|{Colors.N}')
+                    response.raise_for_status()
+                    html = await response.read()
 
-                        status_code = response.status
-                        if status_code == 429:
-                            pass
+                    if origem not in self.htmls.keys():
+                        self.htmls[origem] = {}
 
-                        html = await response.text()
-
-                        if origem not in htmls.keys():
-                            htmls[origem] = {}
-
-                        elif destino not in htmls[origem]:
-                            htmls[origem][destino] = html
-
+                    if destino not in self.htmls[origem].keys():
+                        self.htmls[origem][destino] = html
             except Exception as e:
                 print('Error', e)
 
         self.contador += 1
 
-    @staticmethod
-    def scrapresponse():
+    def scrapresponse(self):
         print('\n\n')
-        print(Colors.BG_WHITE + f'{">" * 25} Extraindo Distâncias {"<" * 25}' + Colors.NEUTRAL)
-        for origem, dhtmls in htmls.items():
+        print(Colors.BG_WHITE + f'{">" * 25} Extraindo Distâncias {"<" * 25}' + Colors.N)
+        for origem, dhtmls in self.htmls.items():
             distances[origem] = {}
             for destino, html in dhtmls.items():
                 soup = BeautifulSoup(html, 'html.parser')
@@ -121,8 +123,8 @@ class ConsultaSheet:
                             km_str = span_text[:-3].replace(".", "").replace(",", ".")
                             distance = float(km_str)
                             distances[origem][destino] = distance
-                            print(f"{origem:^21} x " + Colors.CIAN + f"{destino:^23}" + Colors.NEUTRAL, end=" ")
-                            print("=> Distância: " + Colors.RED + f"{distance}" + Colors.NEUTRAL)
+                            print(f"{origem:^21} x {Colors.CIAN}{destino:^23}{Colors.N}", end=" ")
+                            print(f"=> Distância: {Colors.RED}{distance}{Colors.N}")
 
                 except TypeError:
                     pass
@@ -130,7 +132,7 @@ class ConsultaSheet:
     @staticmethod
     def verifydistance() -> None:
         print('\n\n')
-        print(f"{Colors.BG_WHITESMOKE}{'>' * 25} Melhores Combinações {'<' * 25}{Colors.NEUTRAL}")
+        print(f"{Colors.BG_WHITESMOKE}{'>' * 25} Melhores Combinações {'<' * 25}{Colors.N}")
         for origem, destinos in distances.items():
             best_distance[origem] = {}
             borigem = best_distance[origem]
@@ -138,12 +140,12 @@ class ConsultaSheet:
             for destino, km in destinos.items():
                 if km == min(destinos.values()):
                     borigem[destino] = km
-                    print(f'>> {origem:^23} {Colors.BG_RED}{"X":^3}{Colors.NEUTRAL} {Colors.CIAN}{destino:^23}',
+                    print(f'>> {origem:^23} {Colors.BG_RED}{"X":^3}{Colors.N} {Colors.CIAN}{destino:^23}',
                           end=" ")
-                    print(f' {Colors.NEUTRAL}>>> {Colors.ORANGE}{km:^6}{Colors.NEUTRAL} km' + Colors.NEUTRAL)
+                    print(f' {Colors.N}>>> {Colors.ORANGE}{km:^6}{Colors.N} km' + Colors.N)
 
     def exportxlsx(self):
-        print(f'\n\n{Colors.BG_RED}Exporting...' + Colors.NEUTRAL)
+        print(f'\n\n{Colors.GREEN}[*]{Colors.N} Exporting {Colors.GREEN}[*]{Colors.N}')
         exp = pd.DataFrame()
         if self.option == 1:
             km = [km for km2 in best_distance.values() for km in km2.values()]
@@ -161,7 +163,7 @@ class ConsultaSheet:
             exp['Distância'] = km
 
         exp.to_excel(r'./Result.xlsx')
-        print(Colors.BG_GREEN + 'Exported...' + Colors.NEUTRAL)
+        print(f'{Colors.ORANGE}[*]{Colors.N} Exported  {Colors.ORANGE}[*]{Colors.N}\n\n')
 
     async def tasks_manager(self):
         async with aiohttp.ClientSession() as session:  # Start a session with aiohttp
@@ -171,6 +173,7 @@ class ConsultaSheet:
             inicio = time.time()
             tasks = []
 
+            print('\n\n')
             for batch in batches:
                 batch_items = [(x, params) for x, params in params_dict_copy.items() if x in batch]
                 for x, params in batch_items:
@@ -180,14 +183,13 @@ class ConsultaSheet:
                                                                     origem=origem,
                                                                     destino=destino,
                                                                     params=params)))
-
                 await asyncio.gather(*tasks)
 
             fim = time.time()
             texec = fim - inicio
             print('\n')
-            print(f'Requisições Feitas: ' + Colors.UND_RED + f'{self.contador}' + Colors.NEUTRAL, end=' ')
-            print(f'=> Tempo de Execução: {Colors.UND_RED}{texec:.2f}' + Colors.NEUTRAL)
+            print(f'Requisições Feitas: ' + Colors.UND_RED + f'{self.contador}' + Colors.N, end=' ')
+            print(f'=> Tempo de Execução: {Colors.UND_RED}{texec:.2f}' + Colors.N)
 
             self.scrapresponse()
 
