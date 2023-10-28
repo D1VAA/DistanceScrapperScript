@@ -43,7 +43,7 @@ class ConsultaSheet:
                  colunadestino,
                  uforigem=None,
                  ufdestino=None,
-                 batchsize=None):
+                 batchsize=2):
         self.option = option
         self.htmls = dict()
         self.length_batches = batchsize
@@ -183,6 +183,7 @@ class ConsultaSheet:
                                                                     origem=origem,
                                                                     destino=destino,
                                                                     params=params)))
+                    await asyncio.sleep(2)
                 await asyncio.gather(*tasks)
 
             fim = time.time()

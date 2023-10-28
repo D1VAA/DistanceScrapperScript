@@ -116,7 +116,7 @@ async def managingProxy():
 
             else:
                 print('Encerrando...')
-                return
+                return 'Stop'
 
     result = await managingCoro()  # Aguarda e salva o resultado da execução da função managingCoro
     return result  # Retornar o resultado da função managingCoro
