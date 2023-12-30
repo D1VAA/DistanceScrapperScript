@@ -18,7 +18,6 @@ params_dict = dict()
 distances: dict[str, dict[str, float | int]] = dict()
 best_distance: dict[str, dict[str, str]] = dict()
 
-
 class Colors:
     N = '\033[0m'
     BG_RED = "\033[7;49;91m"
