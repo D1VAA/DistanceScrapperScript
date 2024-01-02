@@ -2,7 +2,7 @@ import requests
 import asyncio
 from dataclasses import dataclass
 from pandas import Series
-from typing import Union, List, Optional
+from typing import Union, List, Optional, Dict, Tuple
 from bs4 import BeautifulSoup
 
 headers = {
@@ -34,38 +34,52 @@ def simple_distance_scrapper(origin: str, destination: str) -> Union[float, str,
 class Route:
     origin: str
     dest: str
-    url: Optional[str] = None
+    url: str
+    key: str = None  # type: ignore
     distance: Union[float, str, None] = None
+    def __post_init__(self):
+        if self.key is None:
+            self.key = f'{self.origin}x{self.dest}'
 
 class Scrapper:
     def __init__(self, origin: Series, destination: Series):
-        self.origin = origin
-        self.destination = destination
+        self._origin = origin
+        self._destination = destination
+        self._query_dict: Dict[str, Route] = dict()
+        self._create_querys()
     
-    def _create_querys(self) -> List[Route]:
-        """Method to create a list with all the urls."""
-        query_list = list()
-        for origin, dest in zip(self.origin, self.destination):
+    def _create_querys(self) -> None: 
+        """Method to create a list with all Route instances and their corresponding urls.
+        The method proceeds to save all the instances in self._query_dict using the instance key, that is automatically generated.
+        """
+        for origin, dest in zip(self._origin, self._destination):
             string = f'{origin} e {dest}'
             url = f'{google_url}{string}'
-            query_list.append(Route(origin, dest, url=url))
-        return query_list
+            instance = Route(origin, dest, url=url)
+            self._query_dict[instance.key] = instance
     
-    async def _request_manager(self) -> None:
+    async def run(self) -> None:
         s = requests.Session()
-        tasks = []
-        for route in self._create_querys():
-            task = asyncio.create_task(self._requester(s, route.url))
+        tasks: List[asyncio.Task] = list()
+        for key, route in self._query_dict.items():
+            task = asyncio.create_task(self._requester(s, route.url, key))
             tasks.append(task)
-            distance = self._parser(response)
+
+        for coro in asyncio.as_completed(tasks):
+            key, html = await coro
+            km = await self._parser(html)
+            self._query_dict[key].distance = km
 
     @staticmethod
-    async def _requester(session, url):
-        session.get(url, headers=headers) 
-        return await session.text
+    async def _requester(session: requests.Session, url: str, route_key: str) -> Tuple[str, str]:
+        """This method does the request and returns the html."""
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, session.get, url)
+        return (route_key, response.text)
 
     @staticmethod
-    def _parser(html) -> Union[float, str]:
+    async def _parser(html) -> Union[float, str]:
+        """Function that tries to extract the distance from the html and then converts to float and return it. If the distance is not found, the method return 'Distância não encontrada.'. """
         soup = BeautifulSoup(html, 'html.parser')
         span = soup.find('span', class_='UdvAnf')
         for item in span:  # type: ignore
