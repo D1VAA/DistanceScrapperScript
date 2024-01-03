@@ -6,7 +6,7 @@ from pandas import Series
 class InvalidFileType(Exception):
     pass
 
-class SheetManager:
+class SheetHandler:
     def __init__(self, 
                  path: str, 
                  option: Literal[1, 2],

@@ -2,7 +2,7 @@ import requests
 import asyncio
 from dataclasses import dataclass
 from pandas import Series
-from typing import Union, List, Optional, Dict, Tuple
+from typing import Union, List, Dict, Tuple
 from bs4 import BeautifulSoup
 
 headers = {
@@ -61,32 +61,44 @@ class Scrapper:
     async def run(self) -> None:
         s = requests.Session()
         tasks: List[asyncio.Task] = list()
-        for key, route in self._query_dict.items():
-            task = asyncio.create_task(self._requester(s, route.url, key))
-            tasks.append(task)
+        try:
+            for key, route in self._query_dict.items():
+                task = asyncio.create_task(self._requester(s, route.url, key))
+                tasks.append(task)
 
-        for coro in asyncio.as_completed(tasks):
-            key, html = await coro
-            km = await self._parser(html)
-            self._query_dict[key].distance = km
+            for coro in asyncio.as_completed(tasks):
+                key, html = await coro
+                if html != '':
+                    km = await self._parser(html)
+                    self._query_dict[key].distance = km
+        finally:
+            s.close()
 
     @staticmethod
     async def _requester(session: requests.Session, url: str, route_key: str) -> Tuple[str, str]:
         """This method does the request and returns the html."""
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, session.get, url)
-        return (route_key, response.text)
+        try:
+            response = await asyncio.to_thread(session.get, url)
+            response.raise_for_status()
+            return (route_key, response.text)
+        except Exception as e:
+            print(f'Error fecthing data for {route_key}: {e}')
+            return route_key, ''
 
     @staticmethod
     async def _parser(html) -> Union[float, str]:
         """Function that tries to extract the distance from the html and then converts to float and return it. If the distance is not found, the method return 'Distância não encontrada.'. """
         soup = BeautifulSoup(html, 'html.parser')
-        span = soup.find('span', class_='UdvAnf')
-        for item in span:  # type: ignore
-            span_text = item.text  # type: ignore
-            if 'km' in span_text:
-                km_str = span_text[:-3].replace(".", "").replace(",", ".")
-                km = float(km_str)
-                return km
-        return 'Distância não encontrada.'
-    
+        try:
+            span = soup.find('span', class_='UdvAnf')
+            for item in span:  # type: ignore
+                span_text = item.text  # type: ignore
+                if 'km' in span_text:
+                    km_str = span_text[:-3].replace(".", "").replace(",", ".")
+                    km = float(km_str)
+                    return km
+            return 'Not found.'
+
+        except AttributeError:
+            print('Error occurred while searching the span tag.')
+            return 'Not found.'

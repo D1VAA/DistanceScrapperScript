@@ -1,7 +1,6 @@
-from typing import Union, Dict
+from typing import Dict
 from flask import Flask, Response, request, jsonify
 from flask_restful import Api, Resource
-from xmltodict import unparse
 from src.modules.scrapper import simple_distance_scrapper
 
 app = Flask(__name__)
