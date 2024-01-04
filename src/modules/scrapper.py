@@ -10,7 +10,7 @@ headers = {
 }
 google_url = f'https://www.google.com/search?q=distância entre '
 
-def simple_distance_scrapper(origin: str, destination: str) -> Union[float, str, None]:
+async def simple_distance_scrapper(origin: str, destination: str) -> Union[float, str, None]:
     """Function that scrap the distance of two cities from google using requests lib."""
     # ------------------------
     string = f'{origin} e {destination}'
