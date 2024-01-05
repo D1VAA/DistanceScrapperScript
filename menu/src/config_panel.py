@@ -1,7 +1,8 @@
-from typing import Callable, Tuple
+from typing import Callable, Dict
 from menu.src.utils.bcolors import Colors
 from menu.src.manage_panels import ManagePanels 
 import inspect
+import ast
 
 class ConfigPanel(ManagePanels):
     """
@@ -36,7 +37,7 @@ class ConfigPanel(ManagePanels):
         return self
     
     @staticmethod
-    def obj_params(obj: Callable | Tuple) -> dict[str, str]:
+    def obj_params(obj: Callable) -> Dict:
         """
         Method that receives an object and extracts all its parameters.
         """
@@ -44,55 +45,80 @@ class ConfigPanel(ManagePanels):
         def extract_params(sig):
             for param_name, param in sig.parameters.items():
                 if param_name not in ['self', 'cls'] and param.default != inspect.Parameter.empty:
-                    params[param_name] = param.default
-        if isinstance(obj, tuple):
-            for item in obj:
-                if inspect.isclass(item):
-                    extract_params(inspect.signature(item.__init__))
-                else:
-                    extract_params(inspect.signature(item))
+                    params[param_name] = f'Default: {param.default}'
+                elif param_name not in ['self', 'cls']:
+                    params[param_name] = 'No default value'
+        if inspect.isclass(obj):
+            extract_params(inspect.signature(obj.__init__))
         else:
-            if inspect.isclass(obj):
-                extract_params(inspect.signature(obj.__init__))
-            else:
-                extract_params(inspect.signature(obj))
+            extract_params(inspect.signature(obj))
         return params
 
-    def _update_parameters(self, parameter: str, new_value: str):
+    def _update_parameters(self, parameter: str, new_value: str) -> None:
+        """Method called when the set command is called."""
         if parameter not in self.use_instance.opts_keys:
             print(f"{Colors.RED}[!]{Colors.RESET} Parâmetro: {parameter} não encontrado...")
+
         elif ':' in new_value:
-            self._handle_relative_reference(parameter, new_value)
+            ref, opt = new_value.split(':')
+            # Verify if the 'ref' is a panel name and the 'opt' is present in that panel
+            if ref in self.instances and opt in self.instances[ref].opts_keys:
+                self._handle_relative_reference(parameter, new_value)
+
+            elif ref in ['bool', 'int', 'float']:
+                self._force_type(parameter, ref, opt)
+
+            else:
+                print(f'{Colors.RED}[!]{Colors.RESET} Invalid operation...\n')
+
         else:
             self._update_single_parameter(parameter, new_value)
     
-    def _handle_relative_reference(self, parameter, new_value):
+    def _handle_relative_reference(self, parameter: str, new_value: str) -> None:
+        """
+        Method to handle relative references.
+        Relative reference occurr when the new value of a parameter is another function.
+
+        Syntax : 'panel_name:function_nickname'
+        """
         ref, opt = new_value.split(':')
-        if ref in self.instances and opt in self.instances[ref].opts_keys:
-            print(f"\n{Colors.BLUE}[+]{Colors.RESET} Relative reference found...", end= '\t')
-            print(f"{Colors.BLUE}PANEL:{Colors.RESET} [{ref}] {Colors.BLUE}OPT:{Colors.RESET} [{opt}]n\n")
-            instance = self.instances[ref]
-            ref_opt = instance.opts[opt]['func']
-            if ref_opt.__name__ == self.func.__name__:
-                print(f"\n{Colors.RED}[!]{Colors.RESET} Invalid operation...\n")
-                return
-            else:
-                self._params[parameter] = ref_opt
-                self.data[self.func_name][parameter] = ref_opt
+        print(f"\n{Colors.BLUE}[+]{Colors.RESET} Relative reference found...", end= '\t')
+        print(f"{Colors.BLUE}PANEL:{Colors.RESET} [{ref}] {Colors.BLUE}OPT:{Colors.RESET} [{opt}]n\n")
+        instance = self.instances[ref]
+        ref_opt = instance.opts[opt]['func']
+        if ref_opt.__name__ == self.func.__name__:
+            print(f"\n{Colors.RED}[!]{Colors.RESET} Invalid operation...\n")
+            return
         else:
-            print(f'{Colors.RED}[!]{Colors.RESET} Invalid relative reference...\n')
+            self._params[parameter] = ref_opt
+            self.data[self.func_name][parameter] = ref_opt
         self._update_printer_method(parameter, new_value)
     
-    def _update_single_parameter(self, parameter, new_value):
+    def _update_single_parameter(self, parameter: str, new_value:str) -> None:
+        """Method to update a single parameter without any verification."""
         self._params[parameter] = new_value
         self.data[self.func_name][parameter] = new_value
         self._update_printer_method(parameter, new_value)
-    
-    def _update_printer_method(self, parameter, new_value):
+
+    def _force_type(self, parameter: str, ref: str, opt: str) -> None:
+        """
+        Method to force a type for the value of the parameter.
+        Syntax: 'type:value'
+        """
+        allowed_types = {'bool': ast.literal_eval, 'float': float, 'int': int}
+        new_value = allowed_types[ref](str(opt))
+        self._update_single_parameter(parameter, new_value)
+
+    def _update_printer_method(self, parameter: str, new_value: str) -> None:
+        """
+        Method that will update the printer method of Manage Panels after change a parameter value.
+        """
         self.use_instance.opts[parameter]['desc'] = new_value
         self.use_instance.printer(opt='opts')
 
-    def _execute(self):
+    def _execute(self) -> None:
+        """Method to execute a function, create a instance or call a method.
+        For classes, the method create a instance and save in the data dictionary with the function name and the key word 'instance', to make easier to call methods using a respective instance."""
         print(f'{Colors.BLUE}[-]{Colors.RESET} Running...')
         print(f"{'-'*60}\n\n")
         if inspect.isclass(self.func):
@@ -100,12 +126,12 @@ class ConfigPanel(ManagePanels):
             print(msg, end='\n\n')
             result = self.func(**self._params)
             self.data[self.func_name]['instance'] = result
+        elif inspect.ismethod(self.func):
+            print(f"|{'-'*3}> Loading Instance", end='\n\n')
+            class_name = self.func.__qualname__.split('.')[0]
+            instance = self.data[class_name]['instance']
+            method = self.func
+            method(instance, **self._params)
+        # If the callable is not a method or a class, must be a function.
         else:
-            if inspect.ismethod(self.func):
-                print(f"|{'-'*3}> Loading Instance", end='\n\n')
-                class_name = self.func.__qualname__.split('.')[0]
-                instance = self.data[class_name]['instance']
-                method = self.func
-                method(instance, **self._params)
-            else:
-                self.func(**self._params)
+            self.func(**self._params)

@@ -1,4 +1,3 @@
-import requests
 from typing import Literal, List, Dict
 import pandas as pd
 from pandas import Series
