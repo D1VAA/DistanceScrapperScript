@@ -1,34 +1,35 @@
-import requests
+import aiohttp
 import asyncio
+import pandas as pd
 from dataclasses import dataclass
-from pandas import Series
-from typing import Union, List, Dict, Tuple
+from src.modules.sheet_handler import SheetHandler
+from typing import Union, List, Dict, Tuple, Literal
 from bs4 import BeautifulSoup
-
 headers = {
 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0'
 }
 google_url = f'https://www.google.com/search?q=distância entre '
 
-async def simple_distance_scrapper(origin: str, destination: str) -> Union[float, str, None]:
+async def simple_distance_scrapper(session, origin: str, destination: str) -> Union[float, str, None]:
     """Function that scrap the distance of two cities from google using requests lib."""
     # ------------------------
     string = f'{origin} e {destination}'
     url = f'{google_url}{string}'
     # ------------------------
 
-    r = requests.get(url, headers=headers)
-    soup = BeautifulSoup(r.text, 'html.parser')
-    span = soup.find('span', class_='UdvAnf')
-    if span is not None:
-        for item in span:
-            span_text = item.text  #type: ignore
-            if 'km' in span_text:
-                km_str = span_text[:-3].replace(".", "").replace(",", ".")
-                distance = float(km_str)
-                return distance
-    else:
-        return 'Distance not found.'
+    async with session.get(url, headers=headers) as response:
+        html = await response.text() 
+        soup = BeautifulSoup(html, 'html.parser')
+        span = soup.find('span', class_='UdvAnf')
+        if span is not None:
+            for item in span:
+                span_text = item.text  #type: ignore
+                if 'km' in span_text:
+                    km_str = span_text[:-3].replace(".", "").replace(",", ".")
+                    distance = float(km_str)
+                    return distance
+        else:
+            return 'Distance not found.'
 
 @dataclass
 class Route:
@@ -39,49 +40,79 @@ class Route:
     distance: Union[float, str, None] = None
     def __post_init__(self):
         if self.key is None:
-            self.key = f'{self.origin}x{self.dest}'
+            self.key = f'{self.origin} x {self.dest}'
 
-class Scrapper:
-    def __init__(self, origin: Series, destination: Series):
-        self._origin = origin
-        self._destination = destination
+class ScrapFromFile(SheetHandler):
+    def __init__(self, path: str, option: Literal[1,2]):
+        super().__init__(path, option)
         self._query_dict: Dict[str, Route] = dict()
         self._create_querys()
+
+    @property
+    def distances(self) -> Dict[str, Union[Dict[str,float], float]]:
+        distances: Dict = dict()
+        for _, route in self._query_dict.items():
+            if route.origin not in distances:
+                distances[route.origin] = {}
+            distances[route.origin][route.dest] = route.distance
+        return distances
     
     def _create_querys(self) -> None: 
         """Method to create a list with all Route instances and their corresponding urls.
         The method proceeds to save all the instances in self._query_dict using the instance key, that is automatically generated.
         """
-        for origin, dest in zip(self._origin, self._destination):
-            string = f'{origin} e {dest}'
-            url = f'{google_url}{string}'
-            instance = Route(origin, dest, url=url)
-            self._query_dict[instance.key] = instance
+        for origin, dest in self.cities_combination.items():
+            if isinstance(dest, list):
+                for destination in dest:
+                    string = f'{origin} e {destination}'
+                    url = f'{google_url}{string}'
+                    instance = Route(origin, destination, url=url)
+                    self._query_dict[instance.key] = instance
+            else:
+                string = f'{origin} e {dest}'
+                url = f'{google_url}{string}'
+                instance = Route(origin, dest, url=url)
+                self._query_dict[instance.key] = instance
+                
+    async def _create_session(self) -> None:
+        self.session = aiohttp.ClientSession()
     
-    async def run(self) -> None:
-        s = requests.Session()
+    async def _close_session(self) -> None:
+        await self.session.close()
+    
+    async def _core(self) -> None:
+        await self._create_session()
         tasks: List[asyncio.Task] = list()
         try:
             for key, route in self._query_dict.items():
-                task = asyncio.create_task(self._requester(s, route.url, key))
-                tasks.append(task)
+                tasks.append(asyncio.create_task(self._requester(route.url, key)))
 
-            for coro in asyncio.as_completed(tasks):
-                key, html = await coro
-                if html != '':
-                    km = await self._parser(html)
-                    self._query_dict[key].distance = km
+            results = await asyncio.gather(*tasks)
+            for key, distance in results:
+                self._query_dict[key].distance = distance
+        except Exception as e:
+            print(e)
         finally:
-            s.close()
+            await self._close_session()
 
-    @staticmethod
-    async def _requester(session: requests.Session, url: str, route_key: str) -> Tuple[str, str]:
+    async def _requester(self, url: str, route_key: str) -> Tuple[str, str|float]:
         """This method does the request and returns the html."""
         try:
-            response = await asyncio.to_thread(session.get, url)
-            response.raise_for_status()
-            return (route_key, response.text)
-        except Exception as e:
+            async with self.session.get(url, headers=headers) as response:
+                # If the program receive 429 HTTP Code (Too Many Requests), it proceeds closing the actual session and open a new session.
+                if response.status == 429:
+                    print(f'Received 429 status code. Creating a new session.')
+                    await self._close_session()
+                    await self._create_session()
+                    await asyncio.sleep(3)
+                    return await self._requester(url, route_key)
+
+                else:
+                    html = await response.text()
+                    distance = await self._parser(html)
+                    return (route_key, distance)
+
+        except aiohttp.ClientError as e:
             print(f'Error fecthing data for {route_key}: {e}')
             return route_key, ''
 
@@ -102,3 +133,12 @@ class Scrapper:
         except AttributeError:
             print('Error occurred while searching the span tag.')
             return 'Not found.'
+    
+    def run(self):
+        asyncio.run(self._core())
+        self._export()
+    
+    def _export(self):
+        """Method to export the data extracted to Excel file."""
+        df = pd.DataFrame(data=self._query_dict)
+        df.to_excel('Result.xlsx')

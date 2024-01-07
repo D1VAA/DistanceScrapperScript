@@ -4,7 +4,6 @@ from pandas import Series
 
 class InvalidFileType(Exception):
     pass
-
 class SheetHandler:
     def __init__(self, 
                  path: str, 
@@ -31,7 +30,7 @@ class SheetHandler:
         """Method to create the dictionary with origin and destination line by line from the dataframe."""
         if len(self.origin) == len(self.destination):
             for o, d in zip(self.origin, self.destination):
-                self._combination[o] = list(d)
+                self._combination[o] = d
         else:
             raise TypeError("Option not allowed!\nDifferent number of origins and destinations.")
 

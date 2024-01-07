@@ -45,7 +45,7 @@ class ConfigPanel(ManagePanels):
         def extract_params(sig):
             for param_name, param in sig.parameters.items():
                 if param_name not in ['self', 'cls'] and param.default != inspect.Parameter.empty:
-                    params[param_name] = f'Default: {param.default}'
+                    params[param_name] = param.default
                 elif param_name not in ['self', 'cls']:
                     params[param_name] = 'No default value'
         if inspect.isclass(obj):
@@ -121,12 +121,17 @@ class ConfigPanel(ManagePanels):
         For classes, the method create a instance and save in the data dictionary with the function name and the key word 'instance', to make easier to call methods using a respective instance."""
         print(f'{Colors.BLUE}[-]{Colors.RESET} Running...')
         print(f"{'-'*60}\n\n")
+        print(self.func)
         if inspect.isclass(self.func):
             msg = f"|{'-'*3}> Instance Created"
             print(msg, end='\n\n')
             result = self.func(**self._params)
+            # Verifiy if it's a method.
+            methods = inspect.getmembers(self.func, predicate=inspect.isfunction)
             self.data[self.func_name]['instance'] = result
-        elif inspect.ismethod(self.func):
+            self.data[self.func_name]['methods'] = methods
+        elif self.func.__qualname__.split('.')[1] in self.data[self.func.__qualname__.split('.')[0]]['methods']:
+            print('É um método')
             print(f"|{'-'*3}> Loading Instance", end='\n\n')
             class_name = self.func.__qualname__.split('.')[0]
             instance = self.data[class_name]['instance']

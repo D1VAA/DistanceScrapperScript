@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 from typing import Optional, Dict
 from flask import Flask, request
 from flask_restful import Api, Resource
@@ -33,9 +34,10 @@ class DistanceScrapper(Resource):
         """Method that add a new task in the task dictionary."""
         origin = query_inst.origin
         destination = query_inst.destination
-        task = asyncio.create_task(simple_distance_scrapper(origin, destination))
-        await asyncio.gather(task)
-        cls._data[query_inst.string].distance = task.result()  # type: ignore
+        async with aiohttp.ClientSession() as session:
+            task = asyncio.create_task(simple_distance_scrapper(session, origin, destination))
+            await asyncio.gather(task)
+            cls._data[query_inst.string].distance = task.result()  # type: ignore
 
     def get(self):
         """Get the origin and destination from url and return the distance."""

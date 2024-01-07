@@ -74,3 +74,4 @@ class ManagePanels:
 
             except Exception as e:
                 print(f'{Colors.RED}[!] ERROR >>> {Colors.RESET}', str(e))
+    
