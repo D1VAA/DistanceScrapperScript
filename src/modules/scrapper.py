@@ -140,6 +140,5 @@ class ScrapFromFile(SheetHandler):
     
     def _export(self):
         """Method to export the data extracted to Excel file."""
-        data = [[origin, dest, dist.distance] for (origin, dest, dist) in zip(self.origin, self.destination, self._query_dict.values()]
-        df = pd.DataFrame(data=self._query_dict, columns=['Origem', 'Destino', 'Distância'])
-        df.to_excel('~/Desktop/Result.xlsx')
+        df = pd.DataFrame(data=self._query_dict)
+        df.to_excel('Result.xlsx')
