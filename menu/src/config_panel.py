@@ -82,7 +82,7 @@ class ConfigPanel(ManagePanels):
         Syntax : 'panel_name:function_nickname'
         """
         ref, opt = new_value.split(':')
-        print(f"\n{Colors.BLUE}[+]{Colors.RESET} Relative reference found...", end= '\t')
+        print(f"\n+ Relative reference found...", end= '\t')
         print(f"{Colors.BLUE}PANEL:{Colors.RESET} [{ref}] {Colors.BLUE}OPT:{Colors.RESET} [{opt}]n\n")
         instance = self.instances[ref]
         ref_opt = instance.opts[opt]['func']
@@ -114,29 +114,28 @@ class ConfigPanel(ManagePanels):
         Method that will update the printer method of Manage Panels after change a parameter value.
         """
         self.use_instance.opts[parameter]['desc'] = new_value
-        self.use_instance.printer(opt='opts')
+        self.use_instance.printer()
 
     def _execute(self) -> None:
         """Method to execute a function, create a instance or call a method.
         For classes, the method create a instance and save in the data dictionary with the function name and the key word 'instance', to make easier to call methods using a respective instance."""
         print(f'{Colors.BLUE}[-]{Colors.RESET} Running...')
-        print(f"{'-'*60}\n\n")
-        print(self.func)
-        if inspect.isclass(self.func):
-            msg = f"|{'-'*3}> Instance Created"
-            print(msg, end='\n\n')
-            result = self.func(**self._params)
-            # Verifiy if it's a method.
-            methods = inspect.getmembers(self.func, predicate=inspect.isfunction)
-            self.data[self.func_name]['instance'] = result
-            self.data[self.func_name]['methods'] = methods
-        elif self.func.__qualname__.split('.')[1] in self.data[self.func.__qualname__.split('.')[0]]['methods']:
-            print('É um método')
-            print(f"|{'-'*3}> Loading Instance", end='\n\n')
-            class_name = self.func.__qualname__.split('.')[0]
-            instance = self.data[class_name]['instance']
-            method = self.func
-            method(instance, **self._params)
+        print(f"+{'-'*28}+\n")
+        try:
+            if inspect.isclass(self.func):
+                result = self.func(**self._params)
+                # Verifiy if it's a method.
+                methods = inspect.getmembers(self.func, predicate=inspect.isfunction)
+                self.data[self.func_name]['instance'] = result
+                print('+ Instance created!', end='\n\n')
+                self.data[self.func_name]['methods'] = methods
+            elif self.func.__qualname__.split('.')[1] in self.data[self.func.__qualname__.split('.')[0]]['methods']:
+                class_name = self.func.__qualname__.split('.')[0]
+                instance = self.data[class_name]['instance']
+                method = self.func
+                print(f"+ Loading Instance", end='\n\n')
+                method(instance, **self._params)
+
         # If the callable is not a method or a class, must be a function.
-        else:
+        except:
             self.func(**self._params)

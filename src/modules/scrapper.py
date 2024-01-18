@@ -61,6 +61,7 @@ class ScrapFromFile(SheetHandler):
         """Method to create a list with all Route instances and their corresponding urls.
         The method proceeds to save all the instances in self._query_dict using the instance key, that is automatically generated.
         """
+        print(self.cities_combination)
         for origin, dest in self.cities_combination.items():
             if isinstance(dest, list):
                 for destination in dest:
@@ -131,7 +132,7 @@ class ScrapFromFile(SheetHandler):
             return 'Not found.'
 
         except AttributeError:
-            print('Error occurred while searching the span tag.')
+            print('Error occurred while parsing the html. Span tag not found.')
             return 'Not found.'
     
     def run(self):
