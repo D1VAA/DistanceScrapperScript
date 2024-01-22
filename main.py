@@ -4,4 +4,5 @@ import asyncio
 
 
 scrap = ScrapFromFile('./cotacao.xlsx',option=2)
+print(scrap._query_dict)
 scrap.run()

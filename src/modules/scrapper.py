@@ -61,7 +61,6 @@ class ScrapFromFile(SheetHandler):
         """Method to create a list with all Route instances and their corresponding urls.
         The method proceeds to save all the instances in self._query_dict using the instance key, that is automatically generated.
         """
-        print(self.cities_combination)
         for origin, dest in self.cities_combination.items():
             if isinstance(dest, list):
                 for destination in dest:
@@ -141,6 +140,5 @@ class ScrapFromFile(SheetHandler):
     
     def _export(self):
         """Method to export the data extracted to Excel file."""
-        data = [[origin, dest, dist.distance] for (origin, dest, dist) in zip(self.origin, self.destination, self._query_dict.values())]
-        df = pd.DataFrame(data=data, columns=['Origem', 'Destino', 'Distância'])
-        df.to_excel('/Result.xlsx')
+        df = pd.DataFrame(data=self._query_dict)
+        df.to_excel('./Result.xlsx')

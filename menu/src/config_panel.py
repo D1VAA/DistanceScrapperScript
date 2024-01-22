@@ -56,7 +56,7 @@ class ConfigPanel(ManagePanels):
 
     def _update_parameters(self, parameter: str, new_value: str) -> None:
         """Method called when the set command is called."""
-        if parameter not in self.use_instance.opts_keys:
+        if parameter not in self.use_instance.opt_keys:
             print(f"{Colors.RED}[!]{Colors.RESET} Parâmetro: {parameter} não encontrado...")
 
         elif ':' in new_value:
@@ -113,7 +113,7 @@ class ConfigPanel(ManagePanels):
         """
         Method that will update the printer method of Manage Panels after change a parameter value.
         """
-        self.use_instance.opts[parameter]['desc'] = new_value
+        self.use_instance.panel_opts[parameter].description = new_value
         self.use_instance.printer()
 
     def _execute(self) -> None:
