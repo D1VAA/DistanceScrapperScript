@@ -99,8 +99,8 @@ class ManagePanels:
                 print(f'{Colors.RED}[!]{Colors.RESET} Faltando um ou mais parâmetros obrigatórios.')
             except KeyError:
                 print(f'{Colors.RED}[!]{Colors.RESET} Comando Inválido!')
-            except ValueError:
-                print()
+            except ValueError as e:
+                print(f"Value Error:", e)
             except Exception as e:
                 print(e)
     

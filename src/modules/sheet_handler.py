@@ -11,7 +11,7 @@ class SheetHandler:
                  origin: str="Origem", 
                  destination: str="Destino"):
         self._combination: Dict[str, List] = {}
-        self._opt = {1: self._discover, 2: self._compare}
+        self._opt = {1: self._permutation, 2: self._compare}
         self._path = path
         self._origin = origin
         self._destination = destination
@@ -19,7 +19,7 @@ class SheetHandler:
         self._columns_reader()
         self._opt[option]() 
         
-    def _discover(self):
+    def _permutation(self):
         """Method that create a dictionary with all the destinations to each origin. (No size limitation)."""
         for o in self.origin:
             self._combination[o] = []
@@ -30,7 +30,10 @@ class SheetHandler:
         """Method to create the dictionary with origin and destination line by line from the dataframe."""
         if len(self.origin) == len(self.destination):
             for o, d in zip(self.origin, self.destination):
-                self._combination[o] = [d]
+                if o in self._combination.keys() and d not in self._combination[o]:
+                    self._combination[o].append(d)
+                elif o not in self._combination.keys():
+                    self._combination[o] = [d]
         else:
             raise TypeError("Option not allowed!\nDifferent number of origins and destinations.")
 

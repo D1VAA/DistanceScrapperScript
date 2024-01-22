@@ -45,33 +45,20 @@ class Route:
 class ScrapFromFile(SheetHandler):
     def __init__(self, path: str, option: Literal[1,2]):
         super().__init__(path, option)
+        # O dicionário query_dict salva as instâncias de Route, por uma key que é simplesmente uma string com a origem e o destino separados por um 'x'
         self._query_dict: Dict[str, Route] = dict()
         self._create_querys()
-
-    @property
-    def distances(self) -> Dict[str, Union[Dict[str,float], float]]:
-        distances: Dict = dict()
-        for _, route in self._query_dict.items():
-            if route.origin not in distances:
-                distances[route.origin] = {}
-            distances[route.origin][route.dest] = route.distance
-        return distances
+        self.run()
     
-    def _create_querys(self) -> None: 
+    def _create_querys(self) -> None:
         """Method to create a list with all Route instances and their corresponding urls.
         The method proceeds to save all the instances in self._query_dict using the instance key, that is automatically generated.
         """
         for origin, dest in self.cities_combination.items():
-            if isinstance(dest, list):
-                for destination in dest:
-                    string = f'{origin} e {destination}'
-                    url = f'{google_url}{string}'
-                    instance = Route(origin, destination, url=url)
-                    self._query_dict[instance.key] = instance
-            else:
-                string = f'{origin} e {dest}'
+            for destination in dest:
+                string = f'{origin} e {destination}'
                 url = f'{google_url}{string}'
-                instance = Route(origin, dest, url=url)
+                instance = Route(origin, destination, url=url)
                 self._query_dict[instance.key] = instance
                 
     async def _create_session(self) -> None:
@@ -91,7 +78,7 @@ class ScrapFromFile(SheetHandler):
             for key, distance in results:
                 self._query_dict[key].distance = distance
         except Exception as e:
-            print(e)
+            print("Exception: ",e)
         finally:
             await self._close_session()
 
@@ -116,8 +103,7 @@ class ScrapFromFile(SheetHandler):
             print(f'Error fecthing data for {route_key}: {e}')
             return route_key, ''
 
-    @staticmethod
-    async def _parser(html) -> Union[float, str]:
+    async def _parser(self, html) -> Union[float, str]:
         """Function that tries to extract the distance from the html and then converts to float and return it. If the distance is not found, the method return 'Distância não encontrada.'. """
         soup = BeautifulSoup(html, 'html.parser')
         try:
@@ -128,11 +114,10 @@ class ScrapFromFile(SheetHandler):
                     km_str = span_text[:-3].replace(".", "").replace(",", ".")
                     km = float(km_str)
                     return km
-            return 'Not found.'
+            return 'Não enontrado.'
 
-        except AttributeError:
-            print('Error occurred while parsing the html. Span tag not found.')
-            return 'Not found.'
+        except Exception:
+            return 'Não encontrado.'
     
     def run(self):
         asyncio.run(self._core())
@@ -140,5 +125,12 @@ class ScrapFromFile(SheetHandler):
     
     def _export(self):
         """Method to export the data extracted to Excel file."""
-        df = pd.DataFrame(data=self._query_dict)
+        distance_col: List[float|str|None] = []  # Lista que será utilizada para criar a coluna de distâncias no dataframe.
+        for origin, dest in zip(self.origin, self.destination):
+            string = f'{origin} x {dest}' 
+            distance_col.append(self._query_dict[string].distance)
+
+        df = pd.DataFrame({'Origem': self.origin,
+                           'Destino': self.destination,
+                           'Distância': distance_col})
         df.to_excel('./Result.xlsx')

@@ -127,7 +127,7 @@ class ConfigPanel(ManagePanels):
                 # Verifiy if it's a method.
                 methods = inspect.getmembers(self.func, predicate=inspect.isfunction)
                 self.data[self.func_name]['instance'] = result
-                print('+ Instance created!', end='\n\n')
+                print('[+] Done!', end='\n\n')
                 self.data[self.func_name]['methods'] = methods
             elif self.func.__qualname__.split('.')[1] in self.data[self.func.__qualname__.split('.')[0]]['methods']:
                 class_name = self.func.__qualname__.split('.')[0]
